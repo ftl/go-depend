@@ -71,6 +71,27 @@ func TestMermaidWithTheModuleRoot(t *testing.T) {
 	assert.Contains(t, output, `p0["."]`, "the root package of the module")
 }
 
+func TestMermaidWithImplementations(t *testing.T) {
+	selection := graph.Select(testGraph(),
+		graph.Options{Incoming: true, Depth: 1, Edges: graph.ImplementationEdges}, pathHub)
+
+	assert.Equal(t, `graph LR
+  p0["alone"]
+  p1["hub"]
+  p0 -. implements 2 .-> p1
+`, mermaidOf(t, selection), "two interfaces between the same packages are one arrow")
+}
+
+func TestMermaidWithBothKindsOfEdge(t *testing.T) {
+	selection := graph.Select(testGraph(),
+		graph.Options{Incoming: true, Depth: 1, Edges: graph.AllEdges}, pathHub)
+
+	output := mermaidOf(t, selection)
+
+	assert.Contains(t, output, "p0 --> p2", "main imports hub")
+	assert.Contains(t, output, "p1 -. implements 2 .-> p2", "alone implements hub")
+}
+
 func TestMermaidWithoutPackages(t *testing.T) {
 	assert.Equal(t, "graph LR\n", mermaidOf(t, graph.Selection{}))
 }

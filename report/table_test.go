@@ -19,9 +19,9 @@ func TestTable(t *testing.T) {
 		metricsOf(module+"/leaf", 4, 0, 1, 0, 0.0, 0.0, model.ZoneOfPain),
 	}
 
-	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP
-.        0   2   3    1    1.00  0.00  0.00  -     -
-leaf     4   0   1    0    0.00  0.00  1.00  PAIN  -
+	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP
+.        0   2   3    1    1.00  0.00  0.00    0.00  -     -
+leaf     4   0   1    0    0.00  0.00  0.00    1.00  PAIN  -
 
 Violations:
   example.com/module/leaf: zone of pain, D=1.00
@@ -31,8 +31,8 @@ Violations:
 func TestTableWithoutViolations(t *testing.T) {
 	all := []model.Metrics{metricsOf(module+"/hub", 1, 1, 0, 0, 0.5, 0.5, model.MainSequence)}
 
-	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP
-hub      1   1   0    0    0.50  0.50  0.00  -     -
+	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP
+hub      1   1   0    0    0.50  0.50  0.00    0.00  -     -
 `, tableOf(t, all))
 }
 
@@ -41,9 +41,9 @@ func TestTableWithUnstableDependencies(t *testing.T) {
 	core.UnstableDependencies = []string{module + "/helper", module + "/other"}
 	useless := metricsOf(module+"/abstract", 0, 0, 0, 0, 1.0, 1.0, model.ZoneOfUselessness)
 
-	assert.Equal(t, `PACKAGE   CA  CE  STD  EXT  I     A     D     ZONE     SDP
-abstract  0   0   0    0    1.00  1.00  1.00  USELESS  -
-core      2   2   0    0    0.50  0.00  0.50  -        2
+	assert.Equal(t, `PACKAGE   CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE     SDP
+abstract  0   0   0    0    1.00  1.00  0.00    1.00  USELESS  -
+core      2   2   0    0    0.50  0.00  0.00    0.50  -        2
 
 Violations:
   example.com/module/abstract: zone of uselessness, D=1.00
@@ -59,9 +59,9 @@ func TestTableGroupsByModule(t *testing.T) {
 
 	output := tableOf(t, all(second, first))
 
-	assert.Equal(t, `MODULE              PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP
-example.com/module  pkg      0   0   0    0    1.00  0.00  0.00  -     -
-example.com/other   pkg      0   0   0    0    0.00  0.00  0.00  -     -
+	assert.Equal(t, `MODULE              PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP
+example.com/module  pkg      0   0   0    0    1.00  0.00  0.00    0.00  -     -
+example.com/other   pkg      0   0   0    0    0.00  0.00  0.00    0.00  -     -
 `, output)
 }
 
@@ -79,9 +79,9 @@ func TestTableGroupsNestedModules(t *testing.T) {
 
 	output := tableOf(t, all(innerPkg, outerPkg))
 
-	assert.Equal(t, `MODULE             PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP
-example.com/m      zzz      0   0   0    0    0.00  0.00  0.00  -     -
-example.com/m/sub  aaa      0   0   0    0    0.00  0.00  0.00  -     -
+	assert.Equal(t, `MODULE             PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP
+example.com/m      zzz      0   0   0    0    0.00  0.00  0.00    0.00  -     -
+example.com/m/sub  aaa      0   0   0    0    0.00  0.00  0.00    0.00  -     -
 `, output)
 }
 
@@ -91,9 +91,9 @@ func TestTableWithTheRealityCheck(t *testing.T) {
 	churning := metricsOf(module+"/churn", 0, 2, 0, 0, 1.0, 0.0, model.MainSequence)
 	churning.PerceivedInstability = value(0.25)
 
-	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP  PERCEIVED
-churn    0   2   0    0    1.00  0.00  0.00  -     -    0.25
-stable   3   0   0    0    0.00  0.50  0.50  -     -    0.75
+	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP  PERCEIVED
+churn    0   2   0    0    1.00  0.00  0.00    0.00  -     -    0.25
+stable   3   0   0    0    0.00  0.50  0.00    0.50  -     -    0.75
 `, tableOf(t, all(stable, churning)))
 }
 
@@ -108,7 +108,7 @@ func value(v float64) *float64 {
 }
 
 func TestTableWithoutPackages(t *testing.T) {
-	assert.Equal(t, "PACKAGE  CA  CE  STD  EXT  I  A  D  ZONE  SDP\n", tableOf(t, nil))
+	assert.Equal(t, "PACKAGE  CA  CE  STD  EXT  I  A  A_EDGE  D  ZONE  SDP\n", tableOf(t, nil))
 }
 
 func metricsOf(importPath string, afferent, efferent, stdlib, external int, instability, abstractness float64, zone model.Zone) model.Metrics {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ftl/go-depend/graph"
 	"github.com/ftl/go-depend/model"
@@ -43,6 +44,15 @@ func testGraph() *model.Graph {
 	addImport(g, pathLeft, pathCobra, model.External)
 	addImport(g, pathDeep, pathCobra, model.External)
 	addImport(g, pathRight, pathFmt, model.Stdlib)
+
+	// alone implements two interfaces of hub, and no import records it.
+	g.AddImplementation(model.Implementation{FromPkg: pathAlone, Type: "Impl", ToPkg: pathHub, Interface: "Port"})
+	g.AddImplementation(model.Implementation{FromPkg: pathAlone, Type: "Other", ToPkg: pathHub, Interface: "Second"})
+	// alone also implements an interface of deep, which stays outside of a
+	// selection around hub.
+	g.AddImplementation(model.Implementation{FromPkg: pathAlone, Type: "Third", ToPkg: pathDeep, Interface: "Far"})
+	// right implements an interface of deep, and it imports deep as well.
+	g.AddImplementation(model.Implementation{FromPkg: pathRight, Type: "Sink", ToPkg: pathDeep, Interface: "Target"})
 
 	return g
 }
@@ -160,6 +170,56 @@ func TestSelectWithoutRoots(t *testing.T) {
 	assert.Empty(t, selection.Packages)
 	assert.Empty(t, selection.Externals)
 	assert.Empty(t, selection.Imports)
+}
+
+func TestSelectFollowsImportsByDefault(t *testing.T) {
+	selection := graph.Select(testGraph(), graph.Options{Incoming: true, Depth: 1}, pathHub)
+
+	assert.Equal(t, []string{pathMain, pathHub}, importPaths(selection), "alone is only an implementation")
+	assert.Empty(t, selection.Implementations)
+}
+
+func TestSelectFollowsImplementations(t *testing.T) {
+	selection := graph.Select(testGraph(),
+		graph.Options{Incoming: true, Depth: 1, Edges: graph.ImplementationEdges}, pathHub)
+
+	assert.Equal(t, []string{pathAlone, pathHub}, importPaths(selection), "main imports hub, but implements nothing")
+	assert.Empty(t, selection.Imports, "the imports are not part of this picture")
+	assert.Equal(t, []model.Implementation{
+		{FromPkg: pathAlone, Type: "Impl", ToPkg: pathHub, Interface: "Port"},
+		{FromPkg: pathAlone, Type: "Other", ToPkg: pathHub, Interface: "Second"},
+	}, selection.Implementations, "the edge from alone to the unselected deep is no part of it")
+}
+
+func TestSelectFollowsBothKindsOfEdge(t *testing.T) {
+	selection := graph.Select(testGraph(),
+		graph.Options{Incoming: true, Depth: 1, Edges: graph.AllEdges}, pathHub)
+
+	assert.Equal(t, []string{pathMain, pathAlone, pathHub}, importPaths(selection))
+	assert.NotEmpty(t, selection.Imports)
+	assert.Len(t, selection.Implementations, 2)
+}
+
+func TestSelectContainsAllImplementationsBetweenTheSelectedPackages(t *testing.T) {
+	selection := graph.Select(testGraph(),
+		graph.Options{Outgoing: true, Edges: graph.AllEdges}, pathMain)
+
+	// The implementation of deep by right is part of the picture, although
+	// the traversal never followed it.
+	assert.Contains(t, selection.Implementations,
+		model.Implementation{FromPkg: pathRight, Type: "Sink", ToPkg: pathDeep, Interface: "Target"})
+}
+
+func TestParseEdgeKind(t *testing.T) {
+	for _, name := range []string{"imports", "implements", "both"} {
+		kind, err := graph.ParseEdgeKind(name)
+		require.NoError(t, err)
+		assert.Equal(t, graph.EdgeKind(name), kind)
+	}
+
+	_, err := graph.ParseEdgeKind("nope")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "imports, implements, both")
 }
 
 func TestSelectWithACycle(t *testing.T) {

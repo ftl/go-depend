@@ -59,6 +59,28 @@ type Import struct {
 	From string
 	To   string
 	Kind ImportKind
+
+	// AbstractRefs is the number of distinct exported symbols of the imported
+	// package that the importing package uses and that are abstract: an
+	// interface, or a named function type.
+	AbstractRefs int
+	// ConcreteRefs is the number of distinct exported symbols of the imported
+	// package that the importing package uses and that are concrete.
+	ConcreteRefs int
+}
+
+// Implementation is a type of one package that implements an interface of
+// another package. Go satisfies an interface implicitly, therefore this
+// dependency exists without any import that records it.
+type Implementation struct {
+	// FromPkg is the import path of the package that contains the type.
+	FromPkg string
+	// Type is the name of the type that implements the interface.
+	Type string
+	// ToPkg is the import path of the package that contains the interface.
+	ToPkg string
+	// Interface is the name of the implemented interface.
+	Interface string
 }
 
 // Graph contains the packages of one or more modules and the imports between
@@ -68,14 +90,20 @@ type Graph struct {
 	packages map[string]Package
 	outgoing map[string][]Import
 	incoming map[string][]Import
+
+	implementations []Implementation
+	outgoingImpl    map[string][]Implementation
+	incomingImpl    map[string][]Implementation
 }
 
 // NewGraph returns an empty graph.
 func NewGraph() *Graph {
 	return &Graph{
-		packages: make(map[string]Package),
-		outgoing: make(map[string][]Import),
-		incoming: make(map[string][]Import),
+		packages:     make(map[string]Package),
+		outgoing:     make(map[string][]Import),
+		incoming:     make(map[string][]Import),
+		outgoingImpl: make(map[string][]Implementation),
+		incomingImpl: make(map[string][]Implementation),
 	}
 }
 
@@ -96,6 +124,45 @@ func insertSorted(imports []Import, imp Import, key func(Import) string) []Impor
 	imports = append(imports, imp)
 	slices.SortFunc(imports, func(a, b Import) int { return cmp.Compare(key(a), key(b)) })
 	return imports
+}
+
+// AddImplementation adds an implementation edge to the graph. Neither of the
+// two packages needs to be part of the graph.
+func (g *Graph) AddImplementation(impl Implementation) {
+	g.implementations = insertSortedImplementation(g.implementations, impl)
+	g.outgoingImpl[impl.FromPkg] = insertSortedImplementation(g.outgoingImpl[impl.FromPkg], impl)
+	g.incomingImpl[impl.ToPkg] = insertSortedImplementation(g.incomingImpl[impl.ToPkg], impl)
+}
+
+func insertSortedImplementation(implementations []Implementation, impl Implementation) []Implementation {
+	implementations = append(implementations, impl)
+	slices.SortFunc(implementations, func(a, b Implementation) int {
+		return cmp.Or(
+			cmp.Compare(a.FromPkg, b.FromPkg),
+			cmp.Compare(a.Type, b.Type),
+			cmp.Compare(a.ToPkg, b.ToPkg),
+			cmp.Compare(a.Interface, b.Interface),
+		)
+	})
+	return implementations
+}
+
+// Implementations returns all implementation edges of the graph, sorted by
+// the implementing package and type. The result must not be modified.
+func (g *Graph) Implementations() []Implementation {
+	return g.implementations
+}
+
+// OutgoingImplementations returns the interfaces of other packages that the
+// types of the given package implement. The result must not be modified.
+func (g *Graph) OutgoingImplementations(importPath string) []Implementation {
+	return g.outgoingImpl[importPath]
+}
+
+// IncomingImplementations returns the types of other packages that implement
+// an interface of the given package. The result must not be modified.
+func (g *Graph) IncomingImplementations(importPath string) []Implementation {
+	return g.incomingImpl[importPath]
 }
 
 // Package returns the package with the given import path.

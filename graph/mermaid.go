@@ -16,7 +16,8 @@ const mermaidDirection = "LR"
 
 // Mermaid writes the selection as a mermaid graph. The packages of a module
 // are grouped in a subgraph if the selection covers more than one module. An
-// import that leaves the module of the importing package is dotted.
+// import that leaves the module of the importing package is dotted, and an
+// implementation edge carries the label "implements".
 func Mermaid(w io.Writer, selection Selection) error {
 	ids := idsOf(selection)
 
@@ -24,6 +25,7 @@ func Mermaid(w io.Writer, selection Selection) error {
 	fmt.Fprintf(&out, "graph %s\n", mermaidDirection)
 	writeNodes(&out, selection, ids)
 	writeImports(&out, selection, ids)
+	writeImplementations(&out, selection, ids)
 
 	_, err := io.WriteString(w, out.String())
 	return err
@@ -82,6 +84,32 @@ func writeImports(out *strings.Builder, selection Selection, ids map[string]stri
 	for _, imp := range selection.Imports {
 		fmt.Fprintf(out, "  %s %s %s\n", ids[imp.From], arrowOf(imp.Kind), ids[imp.To])
 	}
+}
+
+// writeImplementations writes one arrow per pair of packages, and not one
+// arrow per implemented interface: five interfaces between the same two
+// packages are five arrows that say the same thing.
+func writeImplementations(out *strings.Builder, selection Selection, ids map[string]string) {
+	counts := make(map[[2]string]int)
+	var pairs [][2]string
+	for _, impl := range selection.Implementations {
+		pair := [2]string{impl.FromPkg, impl.ToPkg}
+		if counts[pair] == 0 {
+			pairs = append(pairs, pair)
+		}
+		counts[pair]++
+	}
+
+	for _, pair := range pairs {
+		fmt.Fprintf(out, "  %s -. %s .-> %s\n", ids[pair[0]], implementsLabel(counts[pair]), ids[pair[1]])
+	}
+}
+
+func implementsLabel(count int) string {
+	if count == 1 {
+		return "implements"
+	}
+	return fmt.Sprintf("implements %d", count)
 }
 
 // arrowOf returns a solid arrow for an import inside the module, and a dotted

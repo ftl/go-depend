@@ -19,7 +19,7 @@ func TestScanFixtureModule(t *testing.T) {
 
 	output := runScanCmd(t, "scan")
 
-	assert.Contains(t, output, "PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP")
+	assert.Contains(t, output, "PACKAGE  CA  CE  STD  EXT  I     A     A_EDGE  D     ZONE  SDP")
 	assert.Contains(t, output, "\ndecl ")
 	assert.Contains(t, output, "\nmodel ")
 	assert.NotContains(t, output, "MODULE", "a single module needs no module column")
@@ -32,9 +32,9 @@ func TestScanCalculatesTheMetrics(t *testing.T) {
 
 	// decl: 4 types and 2 funcs, 3 of them abstract, imported by nobody,
 	// imports only the standard library.
-	assert.Regexp(t, `\ndecl +0 +0 +1 +0 +1\.00 +0\.50 +0\.50 +- +-\n`, output)
+	assert.Regexp(t, `\ndecl +0 +0 +1 +0 +1\.00 +0\.50 +0\.00 +0\.50 +- +-\n`, output)
 	// model: imported by scan, gen and decl is not among them.
-	assert.Regexp(t, `\nmodel +2 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +-\n`, output)
+	assert.Regexp(t, `\nmodel +2 +0 +0 +0 +0\.00 +0\.00 +0\.00 +1\.00 +PAIN +-\n`, output)
 }
 
 func TestScanExcludesFiles(t *testing.T) {
@@ -53,7 +53,7 @@ func TestScanWithMaxDistance(t *testing.T) {
 	strict := runScanCmd(t, "scan", "--max-distance", "0.1")
 
 	assert.Contains(t, strict, "zone of pain")
-	assert.Regexp(t, `\ndecl +0 +0 +1 +0 +1\.00 +0\.50 +0\.50 +USELESS`, strict,
+	assert.Regexp(t, `\ndecl +0 +0 +1 +0 +1\.00 +0\.50 +0\.00 +0\.50 +USELESS`, strict,
 		"decl is abstract, and no package imports it")
 }
 

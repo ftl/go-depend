@@ -22,7 +22,7 @@ import (
 // and module identity, the file names, the syntax trees to find the imports of
 // the individual files, and the type information to count the declarations.
 const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-	packages.NeedModule | packages.NeedSyntax | packages.NeedTypes
+	packages.NeedModule | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo
 
 // Options control how the patterns are resolved.
 type Options struct {
@@ -54,7 +54,16 @@ func Load(options Options, patterns ...string) (*model.Graph, error) {
 		return nil, err
 	}
 
-	return buildGraph(pkgs, exclude)
+	graph, err := buildGraph(pkgs, exclude)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, impl := range implementationsOf(pkgs) {
+		graph.AddImplementation(impl)
+	}
+
+	return graph, nil
 }
 
 func compileExclude(expressions []string) ([]*regexp.Regexp, error) {
@@ -101,11 +110,14 @@ func buildGraph(pkgs []*packages.Package, exclude []*regexp.Regexp) (*model.Grap
 			Abstract:   declarations.abstract,
 		})
 
+		references := referencesOf(pkg, exclude)
 		for _, importPath := range importsOf(pkg, exclude) {
 			graph.AddImport(model.Import{
-				From: pkg.PkgPath,
-				To:   importPath,
-				Kind: classify(importPath, pkg.Module.Path, modulePaths),
+				From:         pkg.PkgPath,
+				To:           importPath,
+				Kind:         classify(importPath, pkg.Module.Path, modulePaths),
+				AbstractRefs: references[importPath].abstract,
+				ConcreteRefs: references[importPath].concrete,
 			})
 		}
 	}

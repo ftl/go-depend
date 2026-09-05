@@ -44,6 +44,18 @@ type Metrics struct {
 	// Distance is D = | A + I - 1 |, in the range 0 to 1.
 	Distance float64
 
+	// AbstractCoupling is the part of the dependent packages of the same
+	// module that use this package through an abstraction: they implement one
+	// of its interfaces, or they use one of its interfaces or function types.
+	// The range is 0 to 1, and a package without any dependent has the value
+	// 0.
+	//
+	// Martin's abstractness A asks a package how abstract it is. In Go an
+	// interface belongs to the package that uses it, and a type implements it
+	// without a reference, therefore A cannot see the answer. This value asks
+	// the dependent packages instead.
+	AbstractCoupling float64
+
 	// PerceivedInstability is the ratio of the months in which the package
 	// was changed to all months of the analyzed git history. It is nil if the
 	// history was not read.

@@ -258,6 +258,82 @@ func TestUnstableDependencyInAnotherModuleIsNoViolation(t *testing.T) {
 	assert.Empty(t, byPath[pathLeaf].UnstableDependencies)
 }
 
+func TestAbstractCoupling(t *testing.T) {
+	const (
+		port     = module + "/port"
+		adapterA = module + "/adaptera"
+		adapterB = module + "/adapterb"
+		concrete = module + "/concrete"
+		unused   = module + "/unused"
+		user     = module + "/user"
+	)
+	graph := model.NewGraph()
+	for _, importPath := range []string{port, adapterA, adapterB, concrete, unused, user} {
+		graph.AddPackage(model.Package{ImportPath: importPath, ModulePath: module})
+	}
+	// Two adapters implement the port without importing it.
+	graph.AddImplementation(model.Implementation{FromPkg: adapterA, Type: "A", ToPkg: port, Interface: "P"})
+	graph.AddImplementation(model.Implementation{FromPkg: adapterB, Type: "B", ToPkg: port, Interface: "P"})
+	// user imports the port and uses its interface.
+	graph.AddImport(model.Import{From: user, To: port, Kind: model.SameModule, AbstractRefs: 1})
+	// user also uses concrete, and only its structures.
+	graph.AddImport(model.Import{From: user, To: concrete, Kind: model.SameModule, ConcreteRefs: 3})
+	// An import from another module does not count.
+	graph.AddImport(model.Import{From: "example.com/other/pkg", To: concrete, Kind: model.WorkspaceSibling, AbstractRefs: 5})
+
+	all := metrics.Of(graph, maxDistance)
+	byPath := make(map[string]model.Metrics, len(all))
+	for _, m := range all {
+		byPath[m.Package.ImportPath] = m
+	}
+
+	assert.InDelta(t, 1.0, byPath[port].AbstractCoupling, 1e-9, "two implementations and one abstract use")
+	assert.InDelta(t, 0.0, byPath[concrete].AbstractCoupling, 1e-9, "only concrete uses, the other module does not count")
+	assert.InDelta(t, 0.0, byPath[unused].AbstractCoupling, 1e-9, "no package depends on it")
+	assert.InDelta(t, 0.0, byPath[adapterA].AbstractCoupling, 1e-9, "an adapter has no dependent")
+}
+
+func TestAbstractCouplingWithMixedUse(t *testing.T) {
+	const (
+		port = module + "/port"
+		user = module + "/user"
+	)
+	graph := model.NewGraph()
+	graph.AddPackage(model.Package{ImportPath: port, ModulePath: module})
+	graph.AddPackage(model.Package{ImportPath: user, ModulePath: module})
+	graph.AddImplementation(model.Implementation{FromPkg: user, Type: "U", ToPkg: port, Interface: "P"})
+	graph.AddImport(model.Import{From: user, To: port, Kind: model.SameModule, AbstractRefs: 1, ConcreteRefs: 2})
+
+	all := metrics.Of(graph, maxDistance)
+
+	for _, m := range all {
+		if m.Package.ImportPath == port {
+			assert.InDelta(t, 0.5, m.AbstractCoupling, 1e-9, "one implementation and one abstract use against two concrete uses")
+			return
+		}
+	}
+	assert.Fail(t, "no metrics for the port")
+}
+
+func TestAbstractCouplingIgnoresImplementationsOfOtherModules(t *testing.T) {
+	const port = module + "/port"
+	graph := model.NewGraph()
+	graph.AddPackage(model.Package{ImportPath: port, ModulePath: module})
+	graph.AddPackage(model.Package{ImportPath: "example.com/other/adapter", ModulePath: "example.com/other"})
+	graph.AddImplementation(model.Implementation{FromPkg: "example.com/other/adapter", Type: "A", ToPkg: port, Interface: "P"})
+	graph.AddImport(model.Import{From: "example.com/other/adapter", To: port, Kind: model.WorkspaceSibling, ConcreteRefs: 1})
+
+	all := metrics.Of(graph, maxDistance)
+
+	for _, m := range all {
+		if m.Package.ImportPath == port {
+			assert.InDelta(t, 0.0, m.AbstractCoupling, 1e-9, "only the same module counts")
+			return
+		}
+	}
+	assert.Fail(t, "no metrics for the port")
+}
+
 func TestOfKeepsTheOrderOfThePackages(t *testing.T) {
 	all := metrics.Of(testGraph(), maxDistance)
 

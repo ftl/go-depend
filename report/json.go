@@ -31,10 +31,11 @@ type jsonPackage struct {
 	Stdlib   int `json:"stdlib"`
 	External int `json:"external"`
 
-	Instability    float64 `json:"instability"`
-	Abstractness   float64 `json:"abstractness"`
-	SignedDistance float64 `json:"signedDistance"`
-	Distance       float64 `json:"distance"`
+	Instability      float64 `json:"instability"`
+	Abstractness     float64 `json:"abstractness"`
+	AbstractCoupling float64 `json:"abstractCoupling"`
+	SignedDistance   float64 `json:"signedDistance"`
+	Distance         float64 `json:"distance"`
 
 	Zone                 string   `json:"zone"`
 	UnstableDependencies []string `json:"unstableDependencies"`
@@ -74,6 +75,7 @@ func jsonPackageOf(m model.Metrics) jsonPackage {
 		External:             m.External,
 		Instability:          m.Instability,
 		Abstractness:         m.Abstractness,
+		AbstractCoupling:     m.AbstractCoupling,
 		SignedDistance:       m.SignedDistance,
 		Distance:             m.Distance,
 		Zone:                 zoneToken(m.Zone),

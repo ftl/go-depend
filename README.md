@@ -11,6 +11,17 @@ go-depend can calculate the following metrics for a Go package:
 - instability (I)
 - abstractness (A)
 - distance from the main sequence (D = | A + I - 1 |)
+- abstract coupling (A_edge)
+
+### Abstract Coupling
+
+The abstractness (A) asks a package how abstract it is. In Go this question has no good answer: an interface usually belongs to the package that uses it, and a type implements an interface without a reference to it. The abstract coupling asks the dependent packages instead:
+
+```
+A_edge = (implementations + abstract uses) / (implementations + abstract uses + concrete uses)
+```
+
+An implementation is a type of another package that implements an interface of this package. An abstract use is a use of an interface or a function type of this package, also a call of a method through one of its interfaces. A concrete use is every other use of an exported symbol. Only the packages of the same module count. A package without any dependent has the value 0.
 
 ## Invariants
 
@@ -116,7 +127,12 @@ go-depend graph ./metrics
 
 # all packages of the module that depend on an external package
 go-depend graph github.com/spf13/cobra --incoming --depth 0
+
+# all packages that implement an interface of the package trainer
+go-depend graph ./trainer --edges=implements --incoming --depth 0
 ```
+
+In Go a type implements an interface without a reference to it. Such a dependency is real, but no import records it, and no import graph can show it. Use `--edges=implements` to make these dependencies visible, and `--edges=both` to see them together with the imports. An arrow with the label `implements` shows how many interfaces of the target package the source package implements.
 
 
 ## License

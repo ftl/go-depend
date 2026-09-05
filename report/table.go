@@ -33,7 +33,7 @@ func writeTable(w io.Writer, all []model.Metrics) error {
 }
 
 func header(shown columns) string {
-	result := "PACKAGE\tCA\tCE\tSTD\tEXT\tI\tA\tD\tZONE\tSDP"
+	result := "PACKAGE\tCA\tCE\tSTD\tEXT\tI\tA\tA_EDGE\tD\tZONE\tSDP"
 	if shown.module {
 		result = "MODULE\t" + result
 	}
@@ -44,9 +44,9 @@ func header(shown columns) string {
 }
 
 func row(m model.Metrics, shown columns) string {
-	result := fmt.Sprintf("%s\t%d\t%d\t%d\t%d\t%.2f\t%.2f\t%.2f\t%s\t%s",
+	result := fmt.Sprintf("%s\t%d\t%d\t%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%s\t%s",
 		m.Package.RelativePath(), m.Afferent, m.Efferent, m.Stdlib, m.External,
-		m.Instability, m.Abstractness, m.Distance, zoneMarker(m.Zone), sdpMarker(m))
+		m.Instability, m.Abstractness, m.AbstractCoupling, m.Distance, zoneMarker(m.Zone), sdpMarker(m))
 	if shown.module {
 		result = m.Package.ModulePath + "\t" + result
 	}

@@ -81,6 +81,7 @@ func ofPackage(graph *model.Graph, pkg model.Package) model.Metrics {
 	}
 	result.Efferent, result.Stdlib, result.External = countOutgoing(graph.Outgoing(pkg.ImportPath))
 
+	result.AbstractCoupling = abstractCoupling(graph, pkg)
 	result.Instability = instability(result.Efferent, result.Afferent)
 	result.Abstractness = abstractness(pkg)
 	result.SignedDistance = result.Abstractness + result.Instability - 1
@@ -127,6 +128,42 @@ func instability(efferent int, afferent int) float64 {
 		return 1
 	}
 	return float64(efferent) / float64(total)
+}
+
+// abstractCoupling returns the part of the dependent packages of the same
+// module that use the package through an abstraction. A package implements an
+// interface of the package, or it uses one of its interfaces or function
+// types. Everything else is a concrete use.
+func abstractCoupling(graph *model.Graph, pkg model.Package) float64 {
+	abstract := implementationsOfSameModule(graph, pkg)
+	concrete := 0
+	for _, imp := range graph.Incoming(pkg.ImportPath) {
+		if imp.Kind != model.SameModule {
+			continue
+		}
+		abstract += imp.AbstractRefs
+		concrete += imp.ConcreteRefs
+	}
+
+	total := abstract + concrete
+	if total == 0 {
+		// No package of the module depends on this one.
+		return 0
+	}
+	return float64(abstract) / float64(total)
+}
+
+// implementationsOfSameModule counts the types of the same module that
+// implement an interface of the package.
+func implementationsOfSameModule(graph *model.Graph, pkg model.Package) int {
+	result := 0
+	for _, impl := range graph.IncomingImplementations(pkg.ImportPath) {
+		from, ok := graph.Package(impl.FromPkg)
+		if ok && from.ModulePath == pkg.ModulePath {
+			result++
+		}
+	}
+	return result
 }
 
 // abstractness returns A = abstractions / declarations. A package without any

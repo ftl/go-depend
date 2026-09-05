@@ -15,15 +15,15 @@ func TestCSV(t *testing.T) {
 	core.Package.Types, core.Package.Funcs, core.Package.Abstract = 3, 1, 1
 	core.UnstableDependencies = []string{module + "/helper", module + "/other"}
 
-	assert.Equal(t, `module,import_path,dir,types,funcs,abstract,afferent,efferent,stdlib,external,instability,abstractness,signed_distance,distance,zone,unstable_dependencies
-example.com/module,example.com/module/core,core,3,1,1,2,1,3,1,0.3333,0.2500,-0.4167,0.4167,main-sequence,example.com/module/helper;example.com/module/other
+	assert.Equal(t, `module,import_path,dir,types,funcs,abstract,afferent,efferent,stdlib,external,instability,abstractness,abstract_coupling,signed_distance,distance,zone,unstable_dependencies
+example.com/module,example.com/module/core,core,3,1,1,2,1,3,1,0.3333,0.2500,0.0000,-0.4167,0.4167,main-sequence,example.com/module/helper;example.com/module/other
 `, reportOf(t, report.CSVFormat, all(core)))
 }
 
 func TestCSVWithoutPackages(t *testing.T) {
 	output := reportOf(t, report.CSVFormat, nil)
 
-	assert.Equal(t, "module,import_path,dir,types,funcs,abstract,afferent,efferent,stdlib,external,instability,abstractness,signed_distance,distance,zone,unstable_dependencies\n", output)
+	assert.Equal(t, "module,import_path,dir,types,funcs,abstract,afferent,efferent,stdlib,external,instability,abstractness,abstract_coupling,signed_distance,distance,zone,unstable_dependencies\n", output)
 }
 
 func TestCSVZones(t *testing.T) {

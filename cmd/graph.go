@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +20,7 @@ type graphFlags struct {
 	outgoing bool
 	depth    int
 	output   string
+	edges    string
 }
 
 func newGraphCmd() *cobra.Command {
@@ -31,7 +34,11 @@ graph. The pattern defaults to ., the package of the current working
 directory, and it may also address a package outside of the module.
 
 go-depend always analyzes the whole module with the pattern ./..., therefore
-run this command in the root directory of the module.`,
+run this command in the root directory of the module.
+
+With --edges=implements the graph shows which type implements an interface of
+another package. Go satisfies an interface implicitly, therefore such a
+dependency exists without any import, and no import graph can show it.`,
 		Args: cobra.MaximumNArgs(1),
 		// The usage of graph does not help with an error that occurs while
 		// the packages are loaded or rendered.
@@ -51,6 +58,8 @@ run this command in the root directory of the module.`,
 		"maximum number of steps from the selected package, 0 for no limit")
 	result.Flags().StringVar(&flags.output, "output", "",
 		"write the graph to this file instead of stdout")
+	result.Flags().StringVar(&flags.edges, "edges", string(graph.ImportEdges),
+		fmt.Sprintf("kind of edge to follow: %s", strings.Join(graph.EdgeKindNames(), "|")))
 
 	return result
 }
@@ -63,6 +72,10 @@ func rootOf(args []string) string {
 }
 
 func runGraph(cmd *cobra.Command, pattern string, flags graphFlags) error {
+	edges, err := graph.ParseEdgeKind(flags.edges)
+	if err != nil {
+		return err
+	}
 	options := load.Options{Exclude: flags.exclude}
 
 	root, err := load.ResolveOne(options, pattern)
@@ -78,6 +91,7 @@ func runGraph(cmd *cobra.Command, pattern string, flags graphFlags) error {
 		Incoming: flags.incoming,
 		Outgoing: flags.outgoing,
 		Depth:    flags.depth,
+		Edges:    edges,
 	}, root)
 
 	return writeGraph(cmd, flags.output, selection)

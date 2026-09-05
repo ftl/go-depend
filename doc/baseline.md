@@ -146,6 +146,155 @@ The variant was rejected for three reasons:
 `model` stays in the zone of pain in both variants: `A=0` is the reason, not
 the definition of `Ce`.
 
+## The Implementation Edges
+
+Iteration 15 finds the types that implement an interface of another package.
+Go satisfies an interface implicitly, therefore these dependencies exist
+without any import. Iteration 16 measured them, to decide how an accidental
+match must be treated.
+
+| project | packages | import edges | implementation edges | with an import | interface with one method |
+|---|---|---|---|---|---|
+| go-depend | 8 | 11 | 0 | 0 | 0 |
+| ctt | 7 | 11 | 16 | 3 | 8 |
+| sdrainer | 22 | 30 | 1 | 1 | 0 |
+| hellocontest | 42 | 115 | 168 | 40 | 115 |
+
+### The two planned filters both remove more signal than noise
+
+**A filter that needs an import** removes 81% of the edges of ctt and 76% of
+the edges of hellocontest. It removes exactly the design that the metric must
+find:
+
+```
+ctt/pkg/corpus.RandomCorpus  implements  ctt/pkg/trainer.Corpus
+```
+
+`corpus` imports `trainer` nowhere. This is a complete inversion, and the
+filter would delete it.
+
+**A filter that needs two methods or more** removes 68% of the edges of
+hellocontest. Its interfaces are the listeners of the Go idiom, and a listener
+has one method:
+
+```
+core/entry.Controller  implements  core/settings.StationListener
+core/callinfo.Callinfo implements  core/logbook.ScoreChangedListener
+```
+
+### The noise is real, but small
+
+An accidental match needs the same method name and the same signature. The
+names of the one-method interfaces are almost all names of the domain:
+`ContestChanged`, `ScoreChanged`, `VFOModeChanged`, `StationChanged`.
+
+Some names are general enough for an accident, and one is proven:
+
+```
+core/logbook.QSOView   is   interface { Show() }
+core/clock.Controller  has  a method Show(), for its own view
+core/bandmap.Bandmap   has  a method Show(), for its own window
+```
+
+Both are reported as implementations of `QSOView`, and both are wrong.
+
+Of the 123 edges with a one-method interface, 26 have a general method name
+(`Show`, `Now`, `Find`, `Add`, `Play`), and 17 of these have no import. This
+is the upper limit of the noise: **approximately 9% of all edges**.
+
+### The generic ports, and what iteration 20 recovered
+
+`sdrainer` produced a single implementation edge, although it declares 18
+interfaces. Its ports carry type parameters, for example
+`IQRecorder[S dsp.Number]`, and an interface with type parameters has no
+method set that a type can implement.
+
+Iteration 20 added the instantiations that a module really uses, from
+`TypesInfo.Instances`. The result:
+
+| project | before | after |
+|---|---|---|
+| go-depend | 0 | 0 |
+| ctt | 16 | 16 |
+| sdrainer | 1 | 2 |
+| hellocontest | 168 | 168 |
+
+The mechanism works: in the fixture `adapter.Box` implements
+`port.Store[string]` as soon as the package `wired` names that instantiation.
+sdrainer wins one single edge, `tci.Process implements core.ChannelService[int]`.
+
+The reason for the small win is the structure of sdrainer: it is generic from
+the top to the bottom. The concrete instantiation happens only in the package
+that connects the parts, and the interesting relation is between two generic
+declarations, for example `pipeline.Pipeline[S,F]` and
+`core.ChannelReceiveListener[F]`. `types.Implements` cannot compare these two:
+the type parameters of the two declarations are different objects. A
+comparison of that kind needs unification, and go/types does not offer it.
+
+Six packages of sdrainer still have `A>0.5` and `A_edge=0`: `dsp`, `multirx`,
+`notify`, `pipeline`, `pipeline/generator` and `scope`. For a module that is
+generic from the top to the bottom, the abstract coupling stays blind.
+
+## `A` and the Abstract Coupling
+
+Iteration 18 added the abstract coupling `A_edge`. It asks the dependent
+packages how they use a package, instead of asking the package how abstract it
+is. Iteration 19 compared both values over four code bases.
+
+| project | packages | mean `A` | mean `A_edge` | packages with `A>0` | packages with `A_edge>0` |
+|---|---|---|---|---|---|
+| go-depend | 8 | 0.00 | 0.00 | 0 | 0 |
+| ctt | 7 | 0.22 | 0.23 | 3 | 3 |
+| sdrainer | 22 | 0.31 | 0.09 | 11 | 7 |
+| hellocontest | 42 | 0.27 | 0.20 | 25 | 23 |
+
+Where both values work, they agree: 6 of 7 packages of ctt and 27 of 42
+packages of hellocontest stay within 0.15 of each other.
+
+### Where the abstract coupling is better
+
+`hellocontest/core/app` connects all parts of the application. `A` gives it
+0.57, and with `I=0.94` it lands in the zone of uselessness: abstract, and
+nobody depends on it. This is wrong, and it is the known weakness of `A` for a
+package that only declares the interfaces of its parts. `A_edge` gives it
+0.03, and the package leaves the zone.
+
+### Where the abstract coupling fails
+
+sdrainer declares its ports with type parameters, and an interface with type
+parameters takes part in no implementation edge. The result is a value of 0
+for six packages that `A` sees as abstract:
+
+| package | `A` | `A_edge` |
+|---|---|---|
+| notify | 1.00 | 0.00 |
+| pipeline/generator | 1.00 | 0.00 |
+| scope | 1.00 | 0.00 |
+| pipeline | 0.95 | 0.00 |
+| multirx | 0.67 | 0.00 |
+| dsp | 0.69 | 0.00 |
+
+`A` is wrong about these packages as well, because it counts generic types as
+abstractions. Both values are wrong, for two different reasons, and neither
+can be trusted for a module that uses generics this way.
+
+### The distance keeps `A`
+
+If `D` used `A_edge`, five packages of sdrainer would change their zone, four
+of them into the zone of pain, only because their ports are generic. A metric
+that gates a build must not do that. `A_edge` stays a column of its own until
+the implementation of a generic port is found.
+
+Two more observations for that decision:
+
+- The zone changes of ctt and hellocontest are small: `ctt/pkg/trainer` moves
+  from the main sequence into the zone of pain because `A` is 0.50 and
+  `A_edge` is 0.47, and the threshold is exactly 0.50. That is a difference at
+  the limit, not a different verdict.
+- No package of hellocontest has `A=0` and `A_edge>0`. The abstract coupling
+  finds no abstraction that `A` does not see there. It corrects the value
+  where `A` is too generous.
+
 ## The Reality Check
 
 ```

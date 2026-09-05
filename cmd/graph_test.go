@@ -61,6 +61,56 @@ func TestGraphWritesToAFile(t *testing.T) {
 	assert.Contains(t, string(content), "graph LR\n")
 }
 
+// implementFixture is the module that the load package uses to test the
+// implementation edges: its packages implement each other without an import.
+const implementFixture = "../load/testdata/implement"
+
+func TestGraphWithImplementationEdges(t *testing.T) {
+	t.Chdir(implementFixture)
+
+	output := runScanCmd(t, "graph", "./port", "--edges=implements", "--incoming", "--depth", "0")
+
+	assert.Equal(t, `graph LR
+  p0["adapter"]
+  p1["port"]
+  p2["wired"]
+  p0 -. implements 5 .-> p1
+  p2 -. implements .-> p1
+`, output, "adapter implements the port without importing it")
+}
+
+func TestGraphWithImportEdgesOnly(t *testing.T) {
+	t.Chdir(implementFixture)
+
+	output := runScanCmd(t, "graph", "./port", "--incoming", "--depth", "0")
+
+	assert.NotContains(t, output, "implements")
+	assert.NotContains(t, output, "adapter", "only wired imports the port")
+}
+
+func TestGraphWithBothKindsOfEdge(t *testing.T) {
+	t.Chdir(implementFixture)
+
+	output := runScanCmd(t, "graph", "./port", "--edges=both", "--incoming", "--depth", "0")
+
+	assert.Contains(t, output, "implements")
+	assert.Contains(t, output, "-->", "the import of wired is shown as well")
+}
+
+func TestGraphFailsForAnUnknownEdgeKind(t *testing.T) {
+	cmd := newRootCmd()
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	cmd.SetArgs([]string{"graph", ".", "--edges=nope"})
+	t.Chdir(fixtureModule)
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown kind of edge")
+}
+
 func TestGraphFailsForAPatternWithSeveralPackages(t *testing.T) {
 	cmd := newRootCmd()
 	out := &bytes.Buffer{}

@@ -47,8 +47,9 @@ func TestImportsAreClassified(t *testing.T) {
 	graph := loadFixture(t)
 
 	assert.Equal(t, []model.Import{
-		{From: fixtureMain, To: fixtureScan, Kind: model.SameModule},
-		{From: fixtureMain, To: "fmt", Kind: model.Stdlib},
+		// main uses scan.Name and fmt.Println, both concrete.
+		{From: fixtureMain, To: fixtureScan, Kind: model.SameModule, ConcreteRefs: 1},
+		{From: fixtureMain, To: "fmt", Kind: model.Stdlib, ConcreteRefs: 1},
 	}, graph.Outgoing(fixtureMain))
 }
 
@@ -84,8 +85,8 @@ func TestLoadWorkspace(t *testing.T) {
 
 	require.Len(t, graph.Packages(), 2)
 	assert.Equal(t, []model.Import{
-		{From: "example.com/a", To: "example.com/b/lib", Kind: model.WorkspaceSibling},
-		{From: "example.com/a", To: "fmt", Kind: model.Stdlib},
+		{From: "example.com/a", To: "example.com/b/lib", Kind: model.WorkspaceSibling, ConcreteRefs: 1},
+		{From: "example.com/a", To: "fmt", Kind: model.Stdlib, ConcreteRefs: 1},
 	}, graph.Outgoing("example.com/a"))
 }
 
@@ -134,6 +135,55 @@ func TestPackageThatDoesNotCompileIsRefused(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "example.com/broken")
 	assert.Contains(t, err.Error(), "could not import example.com/does/not/exist")
+}
+
+func TestReferencesAreClassified(t *testing.T) {
+	graph, err := Load(Options{Dir: "testdata/implement"}, "./...")
+	require.NoError(t, err)
+
+	// wired uses the interfaces port.Corpus and port.Store, calls their
+	// methods Len and Put, and takes the function type port.Handler. All five
+	// are abstract: another implementation can take the place of this one.
+	// wired names port.Corpus twice, and it counts one time.
+	outgoing := graph.Outgoing("example.com/impl/wired")
+	require.Len(t, outgoing, 1)
+	assert.Equal(t, 5, outgoing[0].AbstractRefs, "Corpus, Corpus.Len, Handler, Store and Store.Put")
+	assert.Equal(t, 0, outgoing[0].ConcreteRefs)
+}
+
+func TestConcreteReferences(t *testing.T) {
+	graph := loadFixture(t)
+
+	// scan uses the structure model.Package and its field Name, both concrete.
+	outgoing := graph.Outgoing(fixtureScan)
+	for _, imp := range outgoing {
+		if imp.To != fixtureModel {
+			continue
+		}
+		assert.Equal(t, 0, imp.AbstractRefs)
+		assert.Equal(t, 2, imp.ConcreteRefs, "model.Package and Package.Name")
+		return
+	}
+	assert.Fail(t, "scan does not import model")
+}
+
+func TestReferencesOfAnExcludedFileDoNotCount(t *testing.T) {
+	withGenerated := loadFixture(t)
+	withoutGenerated, err := Load(Options{Dir: "testdata/module", Exclude: []string{`\.pb\.go$`}}, "./...")
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, referencesTo(t, withGenerated, fixtureGen, "encoding/json"))
+	assert.Equal(t, 0, referencesTo(t, withoutGenerated, fixtureGen, "encoding/json"))
+}
+
+func referencesTo(t *testing.T, graph *model.Graph, from string, to string) int {
+	t.Helper()
+	for _, imp := range graph.Outgoing(from) {
+		if imp.To == to {
+			return imp.AbstractRefs + imp.ConcreteRefs
+		}
+	}
+	return 0
 }
 
 func TestPatternWithoutPackages(t *testing.T) {

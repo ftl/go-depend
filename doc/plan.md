@@ -1,7 +1,7 @@
 # Implementation Plan
 
-All 14 iterations are implemented as of 2026-09-04. The measured result is in
-[baseline.md](./baseline.md).
+Iterations 1 to 14 are implemented as of 2026-09-04. The measured result is in
+[baseline.md](./baseline.md). Story 6 is planned, not implemented.
 
 Iterations for the architecture in [architecture.md](./architecture.md). Each
 iteration is self-contained, compiles on its own, and leaves one runnable
@@ -145,6 +145,151 @@ The reality check runs on this module, but its repository has one single
 commit: every package reaches the perceived instability 1.00. The bucket size
 of one month therefore stays an open point.
 
+## Story 6 — Abstract Coupling
+
+Martin's `A` asks a package how abstract it is. In Go that question misses
+most of the answer, because an interface is usually declared by the consumer
+and satisfied implicitly. Two things stay invisible to `A` and to the import
+graph:
+
+- **Inversion deletes the edge.** `ctt/pkg/trainer` declares `Corpus`, and
+  `ctt/pkg/corpus` implements it. Neither package imports the other.
+- **Implementation leaves no reference.** A type satisfies an interface
+  without naming it, so no identifier in the syntax tree records the coupling.
+
+```mermaid
+graph LR
+  subgraph "the import graph today"
+    app --> trainer
+    app --> corpus
+  end
+  subgraph "what actually couples"
+    rc["corpus.RandomCorpus"] -. implements .-> tc["trainer.Corpus"]
+  end
+```
+
+Measured beforehand, to justify the story:
+
+- `types.Implements` finds **16 implementation edges in ctt** against 11
+  import edges. None of them is visible today.
+- Classifying the *references* of an import edge as abstract or concrete —
+  the first idea — measures almost nothing in Go: **76 of ~115 internal edges
+  in hellocontest score 0.00**, and `ctt/pkg/app -> pkg/trainer` scores 0.00
+  although `trainer` is a textbook ports-and-adapters package.
+
+The new metric is therefore built on the implementation edges, and the
+reference counts only serve as its denominator:
+
+```
+A_edge(Y) = implementations into Y / (implementations into Y + concrete references into Y)
+```
+
+It answers: which part of my dependents couples to me through an abstraction
+that I own.
+
+### Decisions for this story
+
+| Decision | Rationale |
+|---|---|
+| the reference collector counts, but go-depend reports no per-edge ratio | the ratio is 0.00 for two thirds of real edges and describes Go's idiom, not the design; the counts are still needed as the denominator of `A_edge` |
+| `A_edge` is a new column, `D` keeps using `A` | measure both over the four code bases before any existing number moves; the same procedure already rejected two plausible ideas |
+| a package that wires the parts together stays as it is | it really does depend on concrete types, and with `Ca=0` it lands at `I=1`, where `A_edge` cannot drag it into a zone |
+| only interfaces of the analyzed modules take part | keeps `A_edge` symmetric with `I` and `Ca`, and avoids that `error`, `io.Reader` and `fmt.Stringer` dominate every result |
+| `graph --edges=imports\|implements\|both`, default `imports` | in ctt the implementation edges outnumber the import edges 16 to 11, so they must not change every existing picture without being asked for |
+| an accidental match is filtered, but the filter is chosen after a measurement | a type with `String()` satisfies any one-method interface with that name; requiring that the implementing package imports the interface's package would remove it, but it would also remove ctt's main case, where `corpus` imports nothing |
+
+### Iteration 15: implementation edges
+
+- `load`: collect the exported interfaces of the analyzed modules with a
+  method set and at least one method, and all exported named types. Match
+  every type, and a pointer to it, against every interface of another package
+  with `types.Implements`. `NeedTypesInfo` is not needed for this: the
+  package scope is enough. Iteration 18 adds it for the references
+- `model`: `Implementation{FromPkg, Type, ToPkg, Interface}` plus an index on
+  `Graph`, sorted like the imports
+- No filter against accidental matches yet: iteration 16 decides it with data
+- A generic type takes part in an edge, a generic interface does not: both
+  measured, not assumed
+- **Check**: fixture module with a port and an adapter that never import each
+  other, one implementation through a pointer receiver, one accidental match
+  through a one-method interface, and one implementation inside a single
+  package that produces no edge
+- **Done when**: `Graph` carries the coupling that no import records
+
+### Iteration 16: measure the accidental matches, then filter
+
+- Run iteration 15 against go-depend, ctt, sdrainer and hellocontest. For
+  every implementation edge, record whether the implementing package imports
+  the package of the interface, and how many methods the interface has
+- Write the numbers into [baseline.md](./baseline.md), then decide the filter:
+  accept every structural match, require the import, or require a minimum
+  number of methods
+- **Result**: no filter. Both planned filters remove more real ports than
+  accidents. `load` stays as it is, and a test keeps the decision visible
+- **Check**: the recorded measurement; a test for the chosen filter
+- **Done when**: the implementation edges are trustworthy enough to build a
+  metric on
+
+### Iteration 17: `graph --edges`
+
+- `graph`: traverse implementation edges as well, and render them as a
+  labelled dotted arrow, `a -. implements .-> b`; the plain dotted arrow keeps
+  its meaning, an import that leaves the module
+- `cmd`: `--edges=imports|implements|both`, default `imports`
+- **Check**: golden test per value of the flag; a selection where an
+  implementation edge connects two packages that no import connects
+- **Done when**: the invisible coupling can be looked at
+
+### Iteration 18: `A_edge`
+
+- `load`: classify the cross-package references from `pkg.TypesInfo.Uses` as
+  abstract (interface with a method set, named function type) or concrete,
+  counted per distinct symbol and stored on `model.Import`
+- `metrics`: `A_edge` per package, over same-module edges; `A_edge = 0` if a
+  package has no dependent at all
+- Deviation from the formula above: the abstract references belong into the
+  numerator as well. A package that uses my interface couples to me
+  abstractly, exactly like a package that implements it. Otherwise the
+  classification of the references would serve no purpose:
+  `A_edge = (implementations + abstract references) / (implementations + abstract references + concrete references)`
+- `report`: one more column, in all three renderers
+- **Check**: table-driven tests on hand-built graphs — a port with two
+  adapters, a package that is only used concretely, a package with no
+  dependent
+- **Done when**: `scan` shows `A` and `A_edge` next to each other
+
+### Iteration 20: the instantiated generic ports
+
+An interface with type parameters takes part in no implementation edge,
+because its methods carry the type parameters and `types.Implements` needs a
+concrete method set. This is no decision, it is a limit of the matching, and
+it hides real ports: sdrainer declares 18 interfaces and produces one single
+edge.
+
+- `load`: collect the instantiations that the module really uses from
+  `pkg.TypesInfo.Instances`, which iteration 18 already loads. Add every
+  instantiated interface of an analyzed package to the ports, and every
+  instantiated type to the possible implementations
+- Only an instantiation with concrete type arguments counts. The name of the
+  type and of the interface stays the name without the arguments, and equal
+  edges are added one time
+- **Check**: the fixture finds `adapter.Box implements port.Store[string]` as
+  soon as some code names the instantiation, and it finds nothing if nobody
+  names it
+- **Done when**: a port with type parameters is no longer invisible, and the
+  rest of the gap is measured and written down
+
+### Iteration 19: compare `A` and `A_edge`
+
+- Run `scan` against go-depend, ctt, sdrainer and hellocontest. Record both
+  values, and the packages where they disagree, in [baseline.md](./baseline.md)
+- Decide with the data: does `D` keep `A`, or does it change to `A_edge`?
+- **Check**: the recorded comparison
+- **Done when**: the question that started this story is answered with numbers
+- **Open**: the comparison ran, and the decision waits for iteration 20. Six
+  packages of sdrainer have `A_edge=0` only because their ports are generic,
+  and no metric must gate a build on such a value
+
 ## Notes
 
 - Iterations 3 and 4 both touch `load`; they are split because iteration 3
@@ -155,3 +300,8 @@ of one month therefore stays an open point.
 - Iterations 7, 11 and 13 are the only ones that add user-visible commands or
   columns. Everything before them is library work behind a compiling build.
 - Story 3 and Story 4 are independent of each other and can be reordered.
+- Story 6 has two iterations that produce no code, 16 and 19. Both exist
+  because a decision is open and only a measurement closes it. Iteration 16
+  blocks 18, because a metric on untrustworthy edges is worse than no metric.
+- Iteration 17 is independent of 18 and 19: the picture of the implementation
+  edges is useful even if the metric never convinces.

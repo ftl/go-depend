@@ -18,10 +18,10 @@ func TestScanWithHistory(t *testing.T) {
 
 	// churn changed in all four months of the history, stable and the main
 	// package only in the first one.
-	assert.Regexp(t, `\nPACKAGE +CA +CE +STD +EXT +I +A +D +ZONE +SDP +PERCEIVED\n`, "\n"+output)
-	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
-	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.25\n`, output)
-	assert.Regexp(t, `\n\. +0 +2 +0 +0 +1\.00 +0\.00 +0\.00 +- +- +0\.25\n`, output)
+	assert.Regexp(t, `\nPACKAGE +CA +CE +STD +EXT +I +A +A_EDGE +D +ZONE +SDP +PERCEIVED\n`, "\n"+output)
+	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
+	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.25\n`, output)
+	assert.Regexp(t, `\n\. +0 +2 +0 +0 +1\.00 +0\.00 +0\.00 +0\.00 +- +- +0\.25\n`, output)
 }
 
 func TestScanWithHistorySince(t *testing.T) {
@@ -30,8 +30,8 @@ func TestScanWithHistorySince(t *testing.T) {
 	output := runScanCmd(t, "scan", "--history", "--since", "2026-03-01")
 
 	// Only march and april are left, and only churn changed in them.
-	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
-	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.00\n`, output)
+	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
+	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.00\n`, output)
 }
 
 func TestScanWithoutHistory(t *testing.T) {

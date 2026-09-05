@@ -58,17 +58,20 @@ change other modules can notice.
 - **load** — resolves patterns via `go/packages`, applies `--exclude` before
   parsing, counts the exported named types and package-level funcs per package
   and marks the abstract ones, and classifies every import as same-module,
-  workspace-sibling, external or stdlib. Produces a complete `model` graph.
-  The only package that knows about ASTs.
+  workspace-sibling, external or stdlib. Finds the implementation edges with
+  `types.Implements`. Produces a complete `model` graph. The only package that
+  knows about ASTs.
 - **metrics** — pure arithmetic over the `model` graph: afferent and efferent
   coupling, `I`, `A = abstract / (types + funcs)` with `A = 0` for an empty
-  denominator, `D`, and the invariant checks. No I/O.
+  denominator, the abstract coupling `A_edge`, `D`, and the invariant checks.
+  No I/O.
 - **history** — runs one `git log --name-status -M --pretty=tformat:%x00%ct`
   subprocess, resolves
   rename chains to the current paths, maps changed files to packages by
   directory, and derives perceived instability per package.
 - **graph** — traverses the `model` graph in the requested directions to the
-  requested depth and renders mermaid.
+  requested depth, follows the imports or the implementation edges or both,
+  and renders mermaid.
 - **report** — renders report rows as an aligned text table, JSON or CSV.
 - **cmd** — cobra command definitions, flag parsing, and the wiring that
   turns flags into calls on the packages above. Owns the exit code.
@@ -143,6 +146,7 @@ visible even though they do not feed `I`.
 | stable dependencies checked per edge | names the offending import instead of averaging it away; an average hides one bad edge among many good ones |
 | stable abstractions and zones collapse into one signed `D` check | "stable but concrete" *is* the zone of pain; two predicates that always agree are one predicate |
 | `--max-distance`, default 0.5 | the only genuinely taste-dependent threshold; a CI adopter must be able to ratchet it |
+| one arrow per pair of packages for the implementations, with the number of interfaces as its label | five interfaces between the same two packages are five arrows that say the same thing; in ctt one pair alone has five |
 | composable `--incoming` / `--outgoing` / `--depth` | two orthogonal knobs instead of three presets; answers questions not yet asked |
 | `--exclude` matches module-relative file paths, before parsing | excluded generated files must contribute neither declarations nor imports; a per-function filter could change `A` but never `Ce`, which is inconsistent |
 | table, JSON and CSV renderers | JSON for pipelines, CSV for architecture reviews; the report row type is the shared contract |
@@ -150,10 +154,31 @@ visible even though they do not feed `I`.
 | `go.work` supported, each module its own universe | cross-module imports count as external, matching the same-module definition of `I`; adding a module to the workspace must not change another module's numbers |
 | a package is shown by its path relative to its module, together with a `MODULE` column as soon as the report covers more than one module | the module column resolves the only ambiguous case, two modules that share a directory prefix; without it a nested module would show the same relative path twice |
 | the violation of `model` is accepted for this module | `model` holds the shared vocabulary as plain data types; interfaces instead of data would make every other package harder to read for the sake of one number, see [baseline.md](./baseline.md) |
+| the abstract coupling asks the dependent packages, and not the package itself | in Go an interface belongs to the package that uses it, and a type implements it without a reference: `A` asks a question that the package cannot answer |
+| a call of a method through an interface counts as an abstract use | the caller uses the abstraction and not one of its implementations; without this rule a package that only calls interface methods would look concrete |
+| every used symbol counts one time, however often the code uses it | a structure inside a loop must not control the result |
+| an implementation edge connects a type with an interface of another package | Go satisfies an interface implicitly, therefore this dependency exists without any import; in ctt there are 16 such edges against 11 import edges, and none of them is visible in the import graph |
+| every structural match is an implementation edge, without any filter | measured against four code bases: a filter that needs an import removes 81% of the edges of ctt, a filter that needs two methods removes 68% of the edges of hellocontest, and both remove real ports; the measured noise stays below 9%, see [baseline.md](./baseline.md) |
+| an interface is no implementation of another interface | an interface that contains all methods of another interface describes the same abstraction, it does not implement it |
+| a generic type takes part in an edge, and a generic interface takes part through the instantiations that the module really uses | an interface with type parameters has no method set that a type can implement; the instantiations come from `TypesInfo.Instances`, and only those with concrete type arguments count |
 | layered around `model` | one job per package, one direction of dependency, and a layout that scores honestly under the tool's own metrics |
 
 ## Open Points
 
+- **A generic type that implements a generic port stays invisible.**
+  Iteration 20 finds a generic port through its instantiations, which is
+  enough for a module that mixes generic and concrete code. It is not enough
+  for a module that is generic from the top to the bottom: there the relation
+  is between `Pipeline[S,F]` and `Listener[F]`, and `types.Implements` cannot
+  compare two generic declarations, because their type parameters are
+  different objects. A comparison of that kind needs unification.
+  Consequence: the abstract coupling of sdrainer is not trustworthy, see
+  [baseline.md](./baseline.md).
+- **An accidental match is not recognized.** `clock.Controller` implements
+  `logbook.QSOView` only because both declare a method `Show()`. The exact
+  test is different: does the program pass a value of the type where the
+  interface is expected? `TypesInfo` from iteration 18 makes this test
+  possible, with a walk over the assignments, the calls and the returns.
 - **`graph` always analyzes the module with `./...`.** The command resolves
   its argument to a single root with a metadata-only load, and then loads the
   module with the cwd-relative pattern `./...`. In a subdirectory of the

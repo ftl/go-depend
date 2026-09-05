@@ -17,7 +17,7 @@ var csvHeader = []string{
 	"module", "import_path", "dir",
 	"types", "funcs", "abstract",
 	"afferent", "efferent", "stdlib", "external",
-	"instability", "abstractness", "signed_distance", "distance",
+	"instability", "abstractness", "abstract_coupling", "signed_distance", "distance",
 	"zone", "unstable_dependencies",
 }
 
@@ -71,6 +71,7 @@ func csvMetricsOf(m model.Metrics) []string {
 		strconv.Itoa(m.External),
 		formatFloat(m.Instability),
 		formatFloat(m.Abstractness),
+		formatFloat(m.AbstractCoupling),
 		formatFloat(m.SignedDistance),
 		formatFloat(m.Distance),
 		zoneToken(m.Zone),

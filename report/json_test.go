@@ -33,6 +33,7 @@ func TestJSON(t *testing.T) {
 	      "external": 1,
 	      "instability": 0.5,
 	      "abstractness": 0.25,
+	      "abstractCoupling": 0,
 	      "signedDistance": -0.25,
 	      "distance": 0.25,
 	      "zone": "pain",

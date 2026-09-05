@@ -43,8 +43,8 @@ func TestCSVWithTheRealityCheck(t *testing.T) {
 
 	output := reportOf(t, report.CSVFormat, all(m))
 
-	assert.Contains(t, output, ",perceived_instability,instability_difference\n")
-	assert.Contains(t, output, ",0.5000,0.2500\n")
+	assert.Contains(t, output, ",perceived_instability\n")
+	assert.Contains(t, output, ",0.5000\n")
 }
 
 func TestCSVWithoutTheRealityCheck(t *testing.T) {

@@ -47,6 +47,10 @@ type Metrics struct {
 	// PerceivedInstability is the ratio of the months in which the package
 	// was changed to all months of the analyzed git history. It is nil if the
 	// history was not read.
+	//
+	// It is deliberately not compared with Instability by a calculation: the
+	// instability counts imports, the perceived instability counts months.
+	// The reader compares the two values.
 	PerceivedInstability *float64
 
 	// Zone is the zone of the package. Any zone except the main sequence
@@ -57,16 +61,6 @@ type Metrics struct {
 	// than this package itself. Each of them violates the invariant about
 	// stable dependencies.
 	UnstableDependencies []string
-}
-
-// InstabilityDifference returns how much the perceived instability differs
-// from the calculated instability. A positive value means that the package
-// changes more often than its calculated instability suggests.
-func (m Metrics) InstabilityDifference() float64 {
-	if m.PerceivedInstability == nil {
-		return 0
-	}
-	return *m.PerceivedInstability - m.Instability
 }
 
 // HasViolation reports whether the package violates one of the invariants.

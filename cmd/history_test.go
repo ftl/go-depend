@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,10 +18,10 @@ func TestScanWithHistory(t *testing.T) {
 
 	// churn changed in all four months of the history, stable and the main
 	// package only in the first one.
-	assert.Regexp(t, `\nPACKAGE +CA +CE +STD +EXT +I +A +D +ZONE +SDP +PERCEIVED +DIFF\n`, "\n"+output)
-	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00 +\+1\.00\n`, output)
-	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.25 +\+0\.25\n`, output)
-	assert.Regexp(t, `\n\. +0 +2 +0 +0 +1\.00 +0\.00 +0\.00 +- +- +0\.25 +-0\.75\n`, output)
+	assert.Regexp(t, `\nPACKAGE +CA +CE +STD +EXT +I +A +D +ZONE +SDP +PERCEIVED\n`, "\n"+output)
+	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
+	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.25\n`, output)
+	assert.Regexp(t, `\n\. +0 +2 +0 +0 +1\.00 +0\.00 +0\.00 +- +- +0\.25\n`, output)
 }
 
 func TestScanWithHistorySince(t *testing.T) {
@@ -29,8 +30,8 @@ func TestScanWithHistorySince(t *testing.T) {
 	output := runScanCmd(t, "scan", "--history", "--since", "2026-03-01")
 
 	// Only march and april are left, and only churn changed in them.
-	assert.Regexp(t, `\nchurn .* 1\.00 +\+1\.00\n`, output)
-	assert.Regexp(t, `\nstable .* 0\.00 +\+0\.00\n`, output)
+	assert.Regexp(t, `\nchurn +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +1\.00\n`, output)
+	assert.Regexp(t, `\nstable +1 +0 +0 +0 +0\.00 +0\.00 +1\.00 +PAIN +- +0\.00\n`, output)
 }
 
 func TestScanWithoutHistory(t *testing.T) {
@@ -42,11 +43,17 @@ func TestScanWithoutHistory(t *testing.T) {
 }
 
 func TestScanWithHistoryFailsOutsideOfARepository(t *testing.T) {
-	t.Chdir(fixtureModule)
+	// The module must lie outside of any git repository. The testdata of the
+	// load package does not: it is part of the repository of go-depend.
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/nogit\n\ngo 1.26\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {}\n")
+	t.Chdir(dir)
 
 	root := newRootCmd()
-	root.SetOut(&testWriter{})
-	root.SetErr(&testWriter{})
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
 	root.SetArgs([]string{"scan", "--history"})
 
 	err := root.Execute()
@@ -54,10 +61,6 @@ func TestScanWithHistoryFailsOutsideOfARepository(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot read the git history")
 }
-
-type testWriter struct{}
-
-func (w *testWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // newModuleRepository creates a directory that is a Go module and a git
 // repository at the same time. churn changes in every month of the history,

@@ -21,9 +21,9 @@ var csvHeader = []string{
 	"zone", "unstable_dependencies",
 }
 
-// csvHistoryHeader contains the columns that only exist if the git history
+// csvHistoryHeader contains the column that only exists if the git history
 // was read.
-var csvHistoryHeader = []string{"perceived_instability", "instability_difference"}
+var csvHistoryHeader = []string{"perceived_instability"}
 
 func writeCSV(w io.Writer, all []model.Metrics) error {
 	shown := shownColumns(all)
@@ -52,7 +52,7 @@ func csvHeaderOf(shown columns) []string {
 func csvRecordOf(m model.Metrics, shown columns) []string {
 	result := csvMetricsOf(m)
 	if shown.history {
-		result = append(result, formatFloat(*m.PerceivedInstability), formatFloat(m.InstabilityDifference()))
+		result = append(result, formatFloat(*m.PerceivedInstability))
 	}
 	return result
 }

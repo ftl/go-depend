@@ -38,7 +38,7 @@ func header(shown columns) string {
 		result = "MODULE\t" + result
 	}
 	if shown.history {
-		result += "\tPERCEIVED\tDIFF"
+		result += "\tPERCEIVED"
 	}
 	return result
 }
@@ -51,7 +51,7 @@ func row(m model.Metrics, shown columns) string {
 		result = m.Package.ModulePath + "\t" + result
 	}
 	if shown.history {
-		result += fmt.Sprintf("\t%.2f\t%+.2f", *m.PerceivedInstability, m.InstabilityDifference())
+		result += fmt.Sprintf("\t%.2f", *m.PerceivedInstability)
 	}
 	return result
 }

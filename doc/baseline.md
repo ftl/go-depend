@@ -146,15 +146,33 @@ The variant was rejected for three reasons:
 `model` stays in the zone of pain in both variants: `A=0` is the reason, not
 the definition of `Ce`.
 
-## The Reality Check Is Not Measured Here
-
-The directory of go-depend is no git repository, therefore
-`scan --history` cannot run against it:
+## The Reality Check
 
 ```
-go-depend: cannot read the git history: fatal: not a git repository (or any of the parent directories): .git
+go-depend scan --history
 ```
 
-The reality check is covered by tests against generated repositories, but it
-has never run against a real history. The bucket size of one month is
-therefore still a guess.
+```
+PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP  PERCEIVED
+.        0   1   3    0    1.00  0.00  0.00  -     -    1.00
+cmd      1   6   5    1    0.86  0.00  0.14  -     -    1.00
+graph    1   1   5    0    0.50  0.00  0.50  -     -    1.00
+history  1   1   9    0    0.50  0.00  0.50  -     -    1.00
+load     1   1   9    1    0.50  0.00  0.50  -     -    1.00
+metrics  1   1   1    0    0.50  0.00  0.50  -     -    1.00
+model    6   0   3    0    0.00  0.00  1.00  PAIN  -    1.00
+report   1   1   9    0    0.50  0.00  0.50  -     -    1.00
+```
+
+The result says nothing, and it says so clearly: the repository contains one
+single commit. The analyzed history is therefore one month long, every package
+changed in that one month, and every package reaches the perceived instability
+1.00.
+
+This is the correct result of the definition, and it shows the limit of the
+reality check: it needs a history that covers several months. With less than a
+handful of buckets the perceived instability can only be 0 or 1, and it says
+more about the age of the repository than about the packages.
+
+The bucket size of one month is therefore still a guess, and go-depend does
+not yet warn about a history that is too short.

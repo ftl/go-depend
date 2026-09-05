@@ -91,9 +91,9 @@ func TestTableWithTheRealityCheck(t *testing.T) {
 	churning := metricsOf(module+"/churn", 0, 2, 0, 0, 1.0, 0.0, model.MainSequence)
 	churning.PerceivedInstability = value(0.25)
 
-	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP  PERCEIVED  DIFF
-churn    0   2   0    0    1.00  0.00  0.00  -     -    0.25       -0.75
-stable   3   0   0    0    0.00  0.50  0.50  -     -    0.75       +0.75
+	assert.Equal(t, `PACKAGE  CA  CE  STD  EXT  I     A     D     ZONE  SDP  PERCEIVED
+churn    0   2   0    0    1.00  0.00  0.00  -     -    0.25
+stable   3   0   0    0    0.00  0.50  0.50  -     -    0.75
 `, tableOf(t, all(stable, churning)))
 }
 
@@ -101,7 +101,6 @@ func TestTableWithoutTheRealityCheck(t *testing.T) {
 	output := tableOf(t, all(metricsOf(module+"/pkg", 0, 0, 0, 0, 1.0, 0.0, model.MainSequence)))
 
 	assert.NotContains(t, output, "PERCEIVED")
-	assert.NotContains(t, output, "DIFF")
 }
 
 func value(v float64) *float64 {

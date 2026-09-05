@@ -131,7 +131,7 @@ visible even though they do not feed `I`.
 | `A` over exported declarations only | `A` describes the package's contract towards its dependents; unexported internals are invisible to them, so `A` stays stable under internal refactoring |
 | tests excluded (`Tests: false`) | test-only imports (testify, mocks, package under test) would inflate `Ce` for every well-tested package |
 | direct imports only for `Ce`/`Ca` | transitivity is a graph-traversal concern, not a coupling metric |
-| reality check is `scan --history`, not a command | it is defined as a comparison against `I`, so it belongs in the table that already holds `I` |
+| reality check is `scan --history`, not a command | the perceived instability is read next to `I`, so it belongs in the table that already holds `I` |
 | the history uses the commit date, not the author date | `git log --since` compares against the commit date; with the author date the limit of the window and the dates of the changes would disagree, and the oldest bucket of the perceived instability would be wrong |
 | rename-aware history via `git log --name-status -M` | a moved package would otherwise appear as two short-lived packages and produce a false mismatch against `I`; `git mv` is common, and the rename lines arrive from the same subprocess and the same parse loop |
 | `git log` subprocess instead of go-git | no dependency tree, faster on large histories, honours the user's existing git configuration |
@@ -139,6 +139,7 @@ visible even though they do not feed `I`.
 | a change of a test file is no change of the package | consistent with the calculated metrics, which ignore test files completely; only `*.go` files that are no `_test.go` count |
 | `git log --relative` | the paths of the changes must be relative to the module, otherwise a module in a subdirectory of a repository matches no package at all |
 | `perceived_I` = active buckets / total buckets | encodes both README heuristics (constant change → 1.0, burst-then-quiet → low), lands natively on 0..1, and is recomputable by hand |
+| the perceived instability is reported next to `I`, and never subtracted from it | `I` counts imports, the perceived instability counts months; both happen to end up between 0 and 1, but their difference has no meaning. The reader compares the two columns |
 | stable dependencies checked per edge | names the offending import instead of averaging it away; an average hides one bad edge among many good ones |
 | stable abstractions and zones collapse into one signed `D` check | "stable but concrete" *is* the zone of pain; two predicates that always agree are one predicate |
 | `--max-distance`, default 0.5 | the only genuinely taste-dependent threshold; a CI adopter must be able to ratchet it |
@@ -166,7 +167,10 @@ visible even though they do not feed `I`.
   a part of a module is still missing.
 - **The bucket size is fixed to one month, without evidence.** A repository
   with a short history has very few buckets, and the perceived instability
-  then jumps in large steps. The reality check has only run against generated
-  repositories: the directory of go-depend is no git repository, so it cannot
-  measure itself. Revisit the bucket size, and the need for a flag, after the
-  first run against a real history.
+  then jumps in large steps. The repository of go-depend has one single
+  commit, so its own reality check reports 1.00 for every package, see
+  [baseline.md](./baseline.md). Revisit the bucket size, and the need for a
+  flag, after the first run against a long history.
+- **A history that is too short is not reported.** With only a few buckets the
+  perceived instability can only be 0 or 1. `scan --history` should say so
+  instead of presenting a number that carries no information.

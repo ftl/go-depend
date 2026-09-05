@@ -39,10 +39,9 @@ type jsonPackage struct {
 	Zone                 string   `json:"zone"`
 	UnstableDependencies []string `json:"unstableDependencies"`
 
-	// PerceivedInstability and InstabilityDifference are only part of the
-	// document if the git history was read.
-	PerceivedInstability  *float64 `json:"perceivedInstability,omitempty"`
-	InstabilityDifference *float64 `json:"instabilityDifference,omitempty"`
+	// PerceivedInstability is only part of the document if the git history
+	// was read.
+	PerceivedInstability *float64 `json:"perceivedInstability,omitempty"`
 }
 
 func writeJSON(w io.Writer, all []model.Metrics) error {
@@ -60,12 +59,6 @@ func jsonPackageOf(m model.Metrics) jsonPackage {
 	dependencies := m.UnstableDependencies
 	if dependencies == nil {
 		dependencies = []string{}
-	}
-
-	var difference *float64
-	if m.PerceivedInstability != nil {
-		value := m.InstabilityDifference()
-		difference = &value
 	}
 
 	return jsonPackage{
@@ -86,7 +79,6 @@ func jsonPackageOf(m model.Metrics) jsonPackage {
 		Zone:                 zoneToken(m.Zone),
 		UnstableDependencies: dependencies,
 
-		PerceivedInstability:  m.PerceivedInstability,
-		InstabilityDifference: difference,
+		PerceivedInstability: m.PerceivedInstability,
 	}
 }

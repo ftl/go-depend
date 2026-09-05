@@ -123,8 +123,8 @@ graph LR
 ### Iteration 13: perceived instability
 
 - `history`: bucket changes by month, `perceived_I` = active buckets / total buckets
-- `cmd`: `--history` and `--since`; `report`: perceived instability and delta columns in all three renderers
-- **Check**: bucketing unit tests — constant change → 1.0, one burst → low, no change → 0; renderer test for the extra columns
+- `cmd`: `--history` and `--since`; `report`: a perceived instability column in all three renderers
+- **Check**: bucketing unit tests — constant change → 1.0, one burst → low, no change → 0; renderer test for the extra column
 - **Done when**: the reality check from the README works
 
 ## Story 5 — Dogfood
@@ -141,8 +141,9 @@ graph LR
 the zone of pain, and that violation is accepted. A gate for the own CI needs
 a decision that is not part of this iteration.
 
-The reality check cannot measure this module, because its directory is no git
-repository. The bucket size of one month therefore stays an open point.
+The reality check runs on this module, but its repository has one single
+commit: every package reaches the perceived instability 1.00. The bucket size
+of one month therefore stays an open point.
 
 ## Notes
 

@@ -66,14 +66,12 @@ func TestJSONWithTheRealityCheck(t *testing.T) {
 	output := reportOf(t, report.JSONFormat, all(m))
 
 	assert.Contains(t, output, `"perceivedInstability": 0.6`)
-	assert.Contains(t, output, `"instabilityDifference": 0.6`)
 }
 
 func TestJSONWithoutTheRealityCheck(t *testing.T) {
 	output := reportOf(t, report.JSONFormat, all(metricsOf(module+"/core", 2, 0, 0, 0, 0.0, 0.0, model.MainSequence)))
 
 	assert.NotContains(t, output, "perceivedInstability")
-	assert.NotContains(t, output, "instabilityDifference")
 }
 
 func TestJSONWithoutPackages(t *testing.T) {

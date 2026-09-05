@@ -295,6 +295,67 @@ Two more observations for that decision:
   finds no abstraction that `A` does not see there. It corrects the value
   where `A` is too generous.
 
+### What the flag `--edge` does to the four code bases
+
+`scan --edge` calculates the distance and the zone with `A_edge` instead of
+`A`. Both values stay in the report.
+
+| project | packages | violations with `A` | violations with `A_edge` | mean `D` with `A` | mean `D` with `A_edge` |
+|---|---|---|---|---|---|
+| go-depend | 8 | 1 | 1 | 0.46 | 0.46 |
+| ctt | 7 | 2 | 3 | 0.40 | 0.42 |
+| sdrainer | 22 | 4 | 7 | 0.33 | 0.47 |
+| hellocontest | 42 | 8 | 9 | 0.35 | 0.36 |
+
+**go-depend does not change.** The module contains no interface, therefore
+both values are 0 for every package.
+
+**ctt changes one package, and the change is a border case.**
+`pkg/trainer` has `A=0.50` and `A_edge=0.47`, and the limit is exactly 0.50.
+`D` moves from 0.50 to 0.53, and the package enters the zone of pain. The two
+values agree about the package, only the limit lies between them.
+
+**hellocontest changes three packages, and one of them is the correction that
+this story is built for.**
+
+| package | `A` | `A_edge` | `I` | zone with `A` | zone with `A_edge` |
+|---|---|---|---|---|---|
+| core/app | 0.57 | 0.03 | 0.94 | uselessness | main sequence |
+| core/remote | 0.50 | 0.33 | 0.00 | main sequence | pain |
+| core/export/cabrillo | 0.20 | 0.11 | 0.33 | main sequence | pain |
+
+`core/app` connects the parts of the application. `A` calls it abstract, and
+because no package depends on it, `A` puts it in the zone of uselessness.
+`A_edge` corrects this.
+
+`core/remote` declares two interfaces that it uses itself,
+`ActionDispatcher` and `Keyer`, and one structure `Server`. Its only dependent
+`core/app` uses `remote.Server` and `remote.NewServer`, both concrete. `A`
+counts the two ports of the package, `A_edge` counts how the package is really
+used. The new zone is correct, but with `Ca=1` it sounds harder than the
+situation is.
+
+**sdrainer changes five packages, and four of these changes are the blind
+spot and no result.**
+
+| package | `A` | `A_edge` | zone with `A` | zone with `A_edge` |
+|---|---|---|---|---|
+| dsp | 0.69 | 0.00 | main sequence | pain |
+| notify | 1.00 | 0.00 | main sequence | pain |
+| pipeline | 0.95 | 0.00 | main sequence | pain |
+| core | 0.52 | 0.28 | main sequence | pain |
+| scope | 1.00 | 0.00 | uselessness | main sequence |
+
+`dsp`, `notify` and `pipeline` reach `A_edge=0.00` because their ports carry
+type parameters and their implementations are generic as well. The mean
+distance of the module grows from 0.33 to 0.47: the metric goes dark, the
+design does not get worse.
+
+**Conclusion.** `--edge` works for a module with concrete ports, and it gives
+one better answer there. For a module that is generic from the top to the
+bottom it invents violations. This is the reason for the flag: the user
+decides per run which value to trust.
+
 ## The Reality Check
 
 ```

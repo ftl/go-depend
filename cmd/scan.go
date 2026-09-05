@@ -27,6 +27,7 @@ type scanFlags struct {
 	maxDistance     float64
 	format          string
 	failOnViolation bool
+	edge            bool
 	history         bool
 	since           string
 }
@@ -56,6 +57,8 @@ whole module.`,
 		fmt.Sprintf("output format: %s", strings.Join(report.FormatNames(), "|")))
 	result.Flags().BoolVar(&flags.failOnViolation, "fail-on-violation", false,
 		"exit with the code 1 if a package violates an invariant")
+	result.Flags().BoolVar(&flags.edge, "edge", false,
+		"use the abstract coupling instead of the abstractness for the distance and the zone")
 	result.Flags().BoolVar(&flags.history, "history", false,
 		"read the git history and compare the perceived with the calculated instability")
 	result.Flags().StringVar(&flags.since, "since", "",
@@ -77,7 +80,10 @@ func runScan(cmd *cobra.Command, patterns []string, flags scanFlags) error {
 		return err
 	}
 
-	all := metrics.Of(graph, flags.maxDistance)
+	all := metrics.Of(graph, metrics.Options{
+		MaxDistance:         flags.maxDistance,
+		UseAbstractCoupling: flags.edge,
+	})
 	if flags.history {
 		if err := addHistory(all, graph, flags.since); err != nil {
 			return err

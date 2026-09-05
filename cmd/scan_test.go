@@ -140,6 +140,21 @@ func TestScanWithoutViolationsSucceedsWithFailOnViolation(t *testing.T) {
 	assert.NotContains(t, output, "Violations:")
 }
 
+func TestScanWithTheEdgeFlag(t *testing.T) {
+	t.Chdir(implementFixture)
+
+	fromAbstractness := runScanCmd(t, "scan")
+	fromCoupling := runScanCmd(t, "scan", "--edge")
+
+	// port has A=0.71 and A_edge=1.00 at I=0.00, adapter has A=0.38 and
+	// A_edge=0.00 at I=1.00. Both values stay in the report, and only the
+	// distance changes.
+	assert.Regexp(t, `\nport +1 +0 +0 +0 +0\.00 +0\.71 +1\.00 +0\.29 +-`, fromAbstractness)
+	assert.Regexp(t, `\nport +1 +0 +0 +0 +0\.00 +0\.71 +1\.00 +0\.00 +-`, fromCoupling)
+	assert.Regexp(t, `\nadapter +0 +0 +0 +0 +1\.00 +0\.38 +0\.00 +0\.38 +-`, fromAbstractness)
+	assert.Regexp(t, `\nadapter +0 +0 +0 +0 +1\.00 +0\.38 +0\.00 +0\.00 +-`, fromCoupling)
+}
+
 func TestScanFailsForAnUnknownFormat(t *testing.T) {
 	cmd := newRootCmd()
 	out := &bytes.Buffer{}

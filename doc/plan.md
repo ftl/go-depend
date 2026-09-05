@@ -1,7 +1,7 @@
 # Implementation Plan
 
-Iterations 1 to 14 are implemented as of 2026-09-04. The measured result is in
-[baseline.md](./baseline.md). Story 6 is planned, not implemented.
+All iterations are implemented, 1 to 14 on 2026-09-04 and 15 to 21 on
+2026-09-05. Every measured result is in [baseline.md](./baseline.md).
 
 Iterations for the architecture in [architecture.md](./architecture.md). Each
 iteration is self-contained, compiles on its own, and leaves one runnable
@@ -18,6 +18,7 @@ graph LR
     S2 --> S4[Story 4<br/>history]
     S3 --> S5[Story 5<br/>dogfood]
     S4 --> S5
+    S5 --> S6[Story 6<br/>abstract coupling]
 ```
 
 ## Story 1 — Walking Skeleton
@@ -147,6 +148,10 @@ of one month therefore stays an open point.
 
 ## Story 6 — Abstract Coupling
 
+**Done.** `A_edge` is a column of its own, the flag `--edge` uses it for the
+distance and the zone, and `graph --edges` shows the implementation edges.
+The results of all measurements are in [baseline.md](./baseline.md).
+
 Martin's `A` asks a package how abstract it is. In Go that question misses
 most of the answer, because an interface is usually declared by the consumer
 and satisfied implicitly. Two things stay invisible to `A` and to the import
@@ -258,6 +263,19 @@ that I own.
   dependent
 - **Done when**: `scan` shows `A` and `A_edge` next to each other
 
+### Iteration 19: compare `A` and `A_edge`
+
+- Run `scan` against go-depend, ctt, sdrainer and hellocontest. Record both
+  values, and the packages where they disagree, in [baseline.md](./baseline.md)
+- Decide with the data: does `D` keep `A`, or does it change to `A_edge`?
+- **Check**: the recorded comparison
+- **Done when**: the question that started this story is answered with numbers
+- **Result**: the comparison ran, and the decision waited for iteration 20:
+  six packages of sdrainer had `A_edge=0` only because their ports are
+  generic, and no value must gate a build on such a blind spot. After
+  iteration 20 the decision is: `D` keeps `A`, and `A_edge` stays a column of
+  its own
+
 ### Iteration 20: the instantiated generic ports
 
 An interface with type parameters takes part in no implementation edge,
@@ -279,16 +297,21 @@ edge.
 - **Done when**: a port with type parameters is no longer invisible, and the
   rest of the gap is measured and written down
 
-### Iteration 19: compare `A` and `A_edge`
+### Iteration 21: the flag `--edge`
 
-- Run `scan` against go-depend, ctt, sdrainer and hellocontest. Record both
-  values, and the packages where they disagree, in [baseline.md](./baseline.md)
-- Decide with the data: does `D` keep `A`, or does it change to `A_edge`?
-- **Check**: the recorded comparison
-- **Done when**: the question that started this story is answered with numbers
-- **Open**: the comparison ran, and the decision waits for iteration 20. Six
-  packages of sdrainer have `A_edge=0` only because their ports are generic,
-  and no metric must gate a build on such a value
+- `metrics`: `Of` takes an `Options` structure with `MaxDistance` and
+  `UseAbstractCoupling`, and a single function decides which value the
+  distance uses
+- `cmd`: the flag `--edge` for `scan`. `A` and `A_edge` stay in the report in
+  any case, only `D` and the zone change
+- **Check**: a hand-built graph where both values disagree, and a command test
+  against the fixture with and without the flag
+- **Done when**: the user can choose the value per run
+- **Result**: measured against the four code bases, see
+  [baseline.md](./baseline.md). The flag corrects one wrong verdict in
+  hellocontest, it changes one border case in ctt, and it invents four
+  violations in sdrainer. This is the reason for a flag instead of a new
+  default
 
 ## Notes
 
@@ -305,3 +328,12 @@ edge.
   blocks 18, because a metric on untrustworthy edges is worse than no metric.
 - Iteration 17 is independent of 18 and 19: the picture of the implementation
   edges is useful even if the metric never convinces.
+- Iteration 20 was not planned. It exists because the question came up why a
+  generic interface is treated differently than an interface. It is not
+  treated differently on purpose: `types.Implements` needs a method set that
+  no interface with type parameters has. The iteration removes the difference
+  as far as go/types allows it.
+- Every measurement of story 6 changed a decision that looked obvious before:
+  both planned filters for an accidental match were wrong, the formula of
+  `A_edge` needed the abstract references, and `A_edge` is not good enough to
+  replace `A` in `D`. Measure first, decide second.

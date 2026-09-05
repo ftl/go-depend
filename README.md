@@ -23,6 +23,10 @@ A_edge = (implementations + abstract uses) / (implementations + abstract uses + 
 
 An implementation is a type of another package that implements an interface of this package. An abstract use is a use of an interface or a function type of this package, also a call of a method through one of its interfaces. A concrete use is every other use of an exported symbol. Only the packages of the same module count. A package without any dependent has the value 0.
 
+go-depend shows A and A_edge in two columns, and it calculates the distance from the main sequence with A. Use the flag `--edge` to calculate the distance and the zone with A_edge instead.
+
+A_edge does not see a port with type parameters if no code of the module names one of its instantiations. In a module that uses generics for all of its packages, A_edge can therefore be 0 although the packages are abstract. Compare both columns before you use `--edge`.
+
 ## Invariants
 
 go-depend can check for a Go package if the following invariants are violated:
@@ -99,6 +103,7 @@ go-depend scan ./internal/scan ./internal/coverage --exclude 'mock_'
 | `--history` | off | Reads the git history and calculates the perceived instability of each package. The table shows it in an additional column. |
 | `--since date` | the full history | Reads only the part of the git history after the given date. Use this flag only together with `--history`. |
 | `--max-distance value` | `0.5` | Marks a package as a violation if its distance from the main sequence is more than this value. |
+| `--edge` | off | Calculates the distance from the main sequence and the zone with the abstract coupling (A_edge) instead of the abstractness (A). The table shows both values in any case. |
 | `--format table\|json\|csv` | `table` | Selects the output format. |
 | `--fail-on-violation` | off | Makes go-depend exit with the code 1 if it finds one violation or more. |
 

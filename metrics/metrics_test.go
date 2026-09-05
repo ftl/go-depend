@@ -152,7 +152,7 @@ func TestZone(t *testing.T) {
 }
 
 func TestZoneWithASmallerThreshold(t *testing.T) {
-	all := metrics.Of(testGraph(), 0.4)
+	all := metrics.Of(testGraph(), metrics.Options{MaxDistance: 0.4})
 
 	byPath := make(map[string]model.Metrics, len(all))
 	for _, m := range all {
@@ -166,13 +166,13 @@ func TestZoneWithASmallerThreshold(t *testing.T) {
 func TestNoUnstableDependencies(t *testing.T) {
 	// In the test graph the instability decreases with every import:
 	// main (1) -> hub (2/3) -> leaf (0) and util (0).
-	for _, m := range metrics.Of(testGraph(), maxDistance) {
+	for _, m := range metrics.Of(testGraph(), defaultOptions()) {
 		assert.Empty(t, m.UnstableDependencies, m.Package.ImportPath)
 	}
 }
 
 func TestUnstableDependencies(t *testing.T) {
-	all := metrics.Of(violationGraph(), maxDistance)
+	all := metrics.Of(violationGraph(), defaultOptions())
 
 	byPath := make(map[string]model.Metrics, len(all))
 	for _, m := range all {
@@ -197,7 +197,7 @@ func TestUnstableDependenciesOutsideOfTheModuleAreIgnored(t *testing.T) {
 	graph.AddImport(model.Import{From: pathLeaf, To: "github.com/spf13/cobra", Kind: model.External})
 	graph.AddImport(model.Import{From: pathLeaf, To: "fmt", Kind: model.Stdlib})
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 
 	require.Len(t, all, 1)
 	assert.Empty(t, all[0].UnstableDependencies)
@@ -216,7 +216,7 @@ func TestDependencyWithTheSameInstabilityIsNoViolation(t *testing.T) {
 		graph.AddImport(model.Import{From: paths[i], To: paths[i+1], Kind: model.SameModule})
 	}
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 
 	byPath := make(map[string]model.Metrics, len(all))
 	for _, m := range all {
@@ -247,7 +247,7 @@ func TestUnstableDependencyInAnotherModuleIsNoViolation(t *testing.T) {
 	graph.AddImport(model.Import{From: pathLeaf, To: pathLib, Kind: model.WorkspaceSibling})
 	graph.AddImport(model.Import{From: pathLib, To: pathOwn, Kind: model.SameModule})
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 
 	byPath := make(map[string]model.Metrics, len(all))
 	for _, m := range all {
@@ -281,7 +281,7 @@ func TestAbstractCoupling(t *testing.T) {
 	// An import from another module does not count.
 	graph.AddImport(model.Import{From: "example.com/other/pkg", To: concrete, Kind: model.WorkspaceSibling, AbstractRefs: 5})
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 	byPath := make(map[string]model.Metrics, len(all))
 	for _, m := range all {
 		byPath[m.Package.ImportPath] = m
@@ -304,7 +304,7 @@ func TestAbstractCouplingWithMixedUse(t *testing.T) {
 	graph.AddImplementation(model.Implementation{FromPkg: user, Type: "U", ToPkg: port, Interface: "P"})
 	graph.AddImport(model.Import{From: user, To: port, Kind: model.SameModule, AbstractRefs: 1, ConcreteRefs: 2})
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 
 	for _, m := range all {
 		if m.Package.ImportPath == port {
@@ -323,7 +323,7 @@ func TestAbstractCouplingIgnoresImplementationsOfOtherModules(t *testing.T) {
 	graph.AddImplementation(model.Implementation{FromPkg: "example.com/other/adapter", Type: "A", ToPkg: port, Interface: "P"})
 	graph.AddImport(model.Import{From: "example.com/other/adapter", To: port, Kind: model.WorkspaceSibling, ConcreteRefs: 1})
 
-	all := metrics.Of(graph, maxDistance)
+	all := metrics.Of(graph, defaultOptions())
 
 	for _, m := range all {
 		if m.Package.ImportPath == port {
@@ -334,15 +334,55 @@ func TestAbstractCouplingIgnoresImplementationsOfOtherModules(t *testing.T) {
 	assert.Fail(t, "no metrics for the port")
 }
 
+func TestDistanceFromTheAbstractCoupling(t *testing.T) {
+	// port is abstract for its dependents, but it declares no interface of
+	// its own: A sees a concrete package, A_edge sees an abstraction.
+	const (
+		port    = module + "/port"
+		adapter = module + "/adapter"
+		user    = module + "/user"
+	)
+	graph := model.NewGraph()
+	graph.AddPackage(model.Package{ImportPath: port, ModulePath: module, Types: 2, Funcs: 0, Abstract: 0})
+	graph.AddPackage(model.Package{ImportPath: adapter, ModulePath: module})
+	graph.AddPackage(model.Package{ImportPath: user, ModulePath: module})
+	graph.AddImplementation(model.Implementation{FromPkg: adapter, Type: "A", ToPkg: port, Interface: "P"})
+	// user makes the port stable: Ca=1 and Ce=0 give I=0.
+	graph.AddImport(model.Import{From: user, To: port, Kind: model.SameModule, AbstractRefs: 1})
+
+	fromAbstractness := byPathOf(metrics.Of(graph, metrics.Options{MaxDistance: maxDistance}))
+	fromCoupling := byPathOf(metrics.Of(graph, metrics.Options{MaxDistance: maxDistance, UseAbstractCoupling: true}))
+
+	assert.InDelta(t, 0.0, fromAbstractness[port].Abstractness, 1e-9)
+	assert.InDelta(t, 1.0, fromAbstractness[port].AbstractCoupling, 1e-9)
+
+	// Both values are reported in any case, only the distance and the zone
+	// change.
+	assert.InDelta(t, 1.0, fromAbstractness[port].Distance, 1e-9, "A=0 and I=0")
+	assert.Equal(t, model.ZoneOfPain, fromAbstractness[port].Zone)
+	assert.InDelta(t, 0.0, fromCoupling[port].Distance, 1e-9, "A_edge=1 and I=0")
+	assert.Equal(t, model.MainSequence, fromCoupling[port].Zone)
+	assert.InDelta(t, 0.0, fromCoupling[port].Abstractness, 1e-9, "the abstractness is still reported")
+	assert.InDelta(t, 1.0, fromCoupling[port].AbstractCoupling, 1e-9)
+}
+
+func byPathOf(all []model.Metrics) map[string]model.Metrics {
+	result := make(map[string]model.Metrics, len(all))
+	for _, m := range all {
+		result[m.Package.ImportPath] = m
+	}
+	return result
+}
+
 func TestOfKeepsTheOrderOfThePackages(t *testing.T) {
-	all := metrics.Of(testGraph(), maxDistance)
+	all := metrics.Of(testGraph(), defaultOptions())
 
 	require.Len(t, all, 5)
 	assert.Equal(t, []string{pathMain, pathAlone, pathHub, pathLeaf, pathUtil}, importPaths(all))
 }
 
 func TestOfEmptyGraph(t *testing.T) {
-	assert.Empty(t, metrics.Of(model.NewGraph(), maxDistance))
+	assert.Empty(t, metrics.Of(model.NewGraph(), defaultOptions()))
 }
 
 const (
@@ -383,9 +423,13 @@ func violationGraph() *model.Graph {
 	return graph
 }
 
+func defaultOptions() metrics.Options {
+	return metrics.Options{MaxDistance: maxDistance}
+}
+
 func metricsOf(t *testing.T, importPath string) model.Metrics {
 	t.Helper()
-	for _, m := range metrics.Of(testGraph(), maxDistance) {
+	for _, m := range metrics.Of(testGraph(), defaultOptions()) {
 		if m.Package.ImportPath == importPath {
 			return m
 		}
